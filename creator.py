@@ -127,7 +127,7 @@ class AdapterObjectAttribute(AdapterAttribute, AdapterCompounded):
 
     def validate(self, owner_instance=None):
         if not owner_instance:
-            raise ValueError('Instance parameter not filled.')
+            raise ValueError('Owner instance parameter not filled.')
         AdapterAttribute.validate(self, owner_instance)
         raw_value = self._get_raw_value(owner_instance)
         if raw_value is None:
@@ -140,12 +140,16 @@ class AdapterMapped:
     def __init__(self, mapping, **kwargs):
         self._mapping = mapping
 
-    def _get_attribute_adapter_instance(self, name, raw_value):
+    def _get_attribute_adapter_instance(self, name, raw_value, owner_instance=None):
+        owner_instance = self
+        self._validate_against_mapping(name, raw_value)
+        adapter_attribute_instance = self._mapping[type(raw_value)]
+        adapter_attribute_instance.__set_name__(owner_instance.__class__, name)
+        return adapter_attribute_instance
+
+    def _validate_against_mapping(self, name, raw_value):
         if type(raw_value) not in self._mapping:
             raise AdapterValidationError('Incorrect data type for key "%s"' % name)
-        adapter_attribute_instance = self._mapping[type(raw_value)]
-        adapter_attribute_instance.__set_name__(self.__class__, name)
-        return adapter_attribute_instance
 
 
 class AdapterFreeContent(BaseAdapter, AdapterMapped):
@@ -195,8 +199,18 @@ class AdapterFreeTypeAttribute(AdapterAttribute, AdapterMapped):
 
     def __get__(self, owner_instance, owner):
         raw_value = self._get_raw_value(owner_instance)
-        adapter_attribute_instance = self._get_attribute_adapter_instance(self._name, raw_value)
+        adapter_attribute_instance = self._get_attribute_adapter_instance(self._name, raw_value, owner_instance)
         return adapter_attribute_instance.__get__(owner_instance, owner)
+
+    def _get_attribute_adapter_instance(self, name, raw_value, owner_instance=None):
+        if not owner_instance:
+            raise ValueError('Owner instance parameter not filled.')
+        return super()._get_attribute_adapter_instance(name, raw_value, owner_instance)
+
+    def validate(self, owner_instance):
+        super().validate(owner_instance)
+        adapter_instance = self.__get__(owner_instance, owner_instance.__class__)
+        adapter_instance.validate()
 
 
 class RelationshipItem(AdapterObjectAttribute):
@@ -211,15 +225,20 @@ relationship_mapping = {
     dict: (RelationshipItem(data_type=dict))
 }
 
+hello_mapping = {
+    str: AdapterAttribute(data_type=str),
+    dict: AdapterObjectAttribute(data_type=dict, required=False)
+}
+
 
 class AttributesObject(AdapterObjectFreeContentAttribute):
-    hello = AdapterAttribute(data_type=int)
+    hello = AdapterFreeTypeAttribute(mapping=hello_mapping)
 
 
 class JSONApi(BaseAdapter):
     type = AdapterAttribute(data_type=str)
     id = AdapterAttribute(data_type=str)
-    attributes = AdapterObjectFreeContentAttribute(mapping=attributes_mapping, searchable=True, required=False)
+    attributes = AttributesObject(mapping=attributes_mapping, searchable=True, required=False)
     relationships = AdapterObjectFreeContentAttribute(mapping=relationship_mapping, searchable=True)
 
 
@@ -227,6 +246,7 @@ data = {
     "id": "1",
     "type": "Siema",
     "attributes": {
+        'hello': {}
     },
     "relationships": {
         "author": {
