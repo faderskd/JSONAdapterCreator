@@ -130,7 +130,10 @@ class AdapterObjectAttribute(AdapterAttribute, AdapterCompounded):
         return (BaseAdapter,)
 
     def _get_adapter_instance_params(self, raw_value):
-        kwargs = {'raw_data': raw_value}
+        kwargs = {
+            'raw_data': raw_value,
+            'searchable': self.searchable
+        }
         return kwargs
 
     def validate(self, owner_instance=None):
@@ -222,6 +225,14 @@ class AdapterFreeTypeAttribute(AdapterAttribute, AdapterMapped):
             adapter_instance.validate()
 
 
+
+
+
+
+
+
+
+
 class LinksObject(AdapterObjectAttribute):
     self = AdapterAttribute(str)
     related: AdapterAttribute(str, required=False)
@@ -252,18 +263,22 @@ class MainDataItem(AdapterObjectAttribute):
     id = AdapterAttribute(str)
     attributes = AdapterObjectFreeContentAttribute(attributes_mapping, required=False, searchable=True)
     links = LinksObject(required=False)
-    relationships = AdapterObjectFreeContentAttribute(relationships_type_mapping, required=False)
+    relationships = AdapterObjectFreeContentAttribute(relationships_type_mapping, required=False, searchable=True)
     # included
 
 
 main_data_mapping = {
-    dict: MainDataItem(),
+    dict: MainDataItem(searchable=True),
     # list: Collection()
 }
 
 
 class JSONApiAdapter(BaseAdapter):
     data = AdapterFreeTypeAttribute(main_data_mapping)
+
+    def __init__(self, raw_data, **kwargs):
+        super().__init__(raw_data, searchable=True)
+
 
 
 raw_data = {
