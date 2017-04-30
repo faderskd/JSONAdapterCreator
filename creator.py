@@ -20,18 +20,14 @@ class AdapterAttribute:
         self._name = name
 
     def __get__(self, instance, owner):
-        return self._get_from_raw_data(instance)
+        return self._get_raw_value(instance)
 
-    def _get_from_raw_data(self, instance):
-        raw_value = None
-        for k, v in self._get_instance_raw_data(instance).items():
-            if k != self._name:
-                continue
-            raw_value = v
-        if not raw_value:
-            raise AdapterDataError('Missing key %s' % self._name)
-        if not isinstance(raw_value, self._data_type):
-            raise AdapterDataError('Incorrect data type for key %s' % self._name)
+    def _get_raw_value(self, instance):
+        raw_value = self._get_instance_raw_data(instance).get(self._name, None)
+        if self._required and not raw_value:
+            raise AdapterDataError('Missing key "%s"' % self._name)
+        if raw_value and not isinstance(raw_value, self._data_type):
+            raise AdapterDataError('Incorrect data type for key "%s"' % self._name)
         return raw_value
 
     def _get_instance_raw_data(self, instance):
@@ -43,22 +39,19 @@ class AdapterAttribute:
 
     def _validate_set_data(self, value):
         if not self._editable:
-            raise AdapterValidationError('Attribute %s is not editable' % self._name)
+            raise AdapterValidationError('Attribute "%s" is not editable' % self._name)
         if self._data_type != type(value):
-            raise AdapterValidationError('Attribute requires %s data type' % str(self._data_type))
+            raise AdapterValidationError('Attribute requires "%s" data type' % str(self._data_type))
 
-    def validate(self, instance):
+    def validate(self, owner_instance):
+        if not self._get_raw_value(owner_instance):
+            return
+
         required_with = set(self._required_with)
-        required_satisfied = False
-        for k, _ in self._get_instance_raw_data(instance).items():
+        for k, _ in self._get_instance_raw_data(owner_instance).items():
             if k in required_with:
                 required_with.remove(k)
-            if k == self._name:
-                required_satisfied = True
-
-        if not required_satisfied and self._required:
-            raise AdapterValidationError("Attribute %s is required" % self._name)
-        if required_with and self._required:
+        if required_with:
             s = "Attribute %s required together with %s" % (self._name, ", ".join([k for k in self._required_with]))
             raise AdapterValidationError(s)
 
@@ -81,8 +74,7 @@ class AdapterCompounded:
         return fields
 
     def validate(self, owner_instance=None):
-        if not owner_instance:
-            owner_instance = self
+        owner_instance = self
         for _, field in self.get_adapter_fields():
             field.validate(owner_instance)
 
@@ -106,9 +98,7 @@ class BaseAdapter(AdapterCompounded):
             if not isinstance(field, AdapterObjectAttribute) or not field.searchable:
                 continue
             adapter_field_instance = field.create_field_adapter_instance(self)
-            value = getattr(adapter_field_instance, search_name, None)
-            if value:
-                return value
+            return getattr(adapter_field_instance, search_name, None)
 
     def serialize_to_raw_data(self):
         return self._raw_data
@@ -135,48 +125,62 @@ class AdapterObjectAttribute(AdapterAttribute, AdapterCompounded):
         return (BaseAdapter,)
 
     def _get_adapter_instance_params(self, instance):
-        kwargs = {'raw_data': self._get_from_raw_data(instance)}
+        kwargs = {'raw_data': self._get_raw_value(instance)}
         return kwargs
 
-    def validate(self, instance=None):
-        if not instance:
+    def validate(self, owner_instance=None):
+        if not owner_instance:
             raise ValueError('Instance parameter not filled.')
-        AdapterAttribute.validate(self, instance)
-        AdapterCompounded.validate(self, instance)
+        AdapterAttribute.validate(self, owner_instance)
+        raw_value = self._get_raw_value(owner_instance)
+        if not raw_value:
+            return
+        adapter_instance = self.create_field_adapter_instance(owner_instance)
+        adapter_instance.validate()
 
 
-class BaseFreeContentAdapter:
+class BaseFreeContent:
+    def __init__(self, mapping):
+        self._mapping = mapping
 
 
 class AdapterFreeContent(BaseAdapter):
     def __init__(self, mapping, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.mapping = mapping
+        self._mapping = mapping
 
     def __getattr__(self, item):
         for k, v in self._raw_data.items():
             if k != item:
                 continue
-            if type(v) not in self.mapping:
-                raise AdapterDataError("Attribute's type not allowed")
-            adapter_attribute = self._create_attribute_adapter_instance(k, v)
+            if type(v) not in self._mapping:
+                raise AdapterDataError("Key's '%s' type not allowed" % k)
+            adapter_attribute = self._get_attribute_adapter_instance(k, v)
             ret = adapter_attribute.__get__(self, self.__class__)
             return ret
         return super().__getattr__(item)
 
-    def _create_attribute_adapter_instance(self, name, value):
-        adapter_attribute_class = self.mapping[type(value)][0]
-        adapter_instance_kwargs = self.mapping[type(value)][1]
-        adapter_instance_kwargs.update({'data_type': type(value)})
-        adapter_attribute = adapter_attribute_class(**adapter_instance_kwargs)
-        adapter_attribute.__set_name__(self.__class__, name)
-        return adapter_attribute
+    def _get_attribute_adapter_instance(self, name, raw_value):
+        adapter_attribute_instance = self._mapping[type(raw_value)]
+        adapter_attribute_instance.__set_name__(self.__class__, name)
+        return adapter_attribute_instance
+
+    def validate(self, owner_instance=None):
+        super().validate()
+        owner_instance = self
+        user_defined_fields = {f[0] for f in self.get_adapter_fields()}
+        for k, v in self._raw_data.items():
+            if k in user_defined_fields:
+                continue
+            if type(v) not in self._mapping:
+                raise AdapterValidationError("Key's '%s' type not allowed" % k)
+            self._get_attribute_adapter_instance(k, v).validate(owner_instance)
 
 
 class AdapterObjectFreeContentAttribute(AdapterObjectAttribute, AdapterCompounded):
     def __init__(self, mapping, **kwargs):
-        self._mapping = mapping
         super().__init__(**kwargs)
+        self._mapping = mapping
 
     def _get_adapter_creation_base_classes(self):
         return (AdapterFreeContent,)
@@ -186,6 +190,20 @@ class AdapterObjectFreeContentAttribute(AdapterObjectAttribute, AdapterCompounde
         kwargs.update({'mapping': self._mapping})
         return kwargs
 
+
+class AdapterFreeTypeAttribute(AdapterAttribute):
+    def __init__(self, mapping, **kwargs):
+        kwargs.pop('data_type', None)
+        super().__init__(data_type=object, **kwargs)
+        self._mapping = mapping
+
+    def __get__(self, instance, owner):
+        pass
+
+    def _get_attribute_adapter_instance(self, name, raw_value):
+        adapter_attribute_instance = self._mapping[type(raw_value)]
+        adapter_attribute_instance.__set_name__(self.__class__, name)
+        return adapter_attribute_instance
 
 class RelationshipItem(AdapterObjectAttribute):
     type = AdapterAttribute(data_type=str)
@@ -199,28 +217,33 @@ relationship_mapping = {
     dict: (RelationshipItem(data_type=dict))
 }
 
+class AttributesObject(AdapterObjectFreeContentAttribute):
+    hello = AdapterAttribute(data_type=int)
+
 
 class JSONApi(BaseAdapter):
-    type = AdapterAttribute(data_type=str, required=False)
+    type = AdapterAttribute(data_type=str)
     id = AdapterAttribute(data_type=str)
-    attributes = AdapterObjectFreeContentAttribute(attributes_mapping, searchable=True)
+    attributes = AttributesObject(attributes_mapping, searchable=True, required=False)
     relationships = AdapterObjectFreeContentAttribute(relationship_mapping, searchable=True)
 
 
 data = {
-    "type": "articles",
     "id": "1",
+    "type": "Siema",
     "attributes": {
-        "title": "Rails is Omakase",
-        "name": "Siemaeniu"
     },
     "relationships": {
         "author": {
-            "type": 2,
+            "type": "s",
             "id": "544"
         },
-        'a': 2
     }
 }
 
 j = JSONApi(data, searchable=True)
+j.validate()
+
+#TODO searchable on which class
+# TODO search on free content's free content attrs ??
+# TODO validate empty dict (required satisfied or not)
