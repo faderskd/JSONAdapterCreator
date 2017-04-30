@@ -222,15 +222,80 @@ class AdapterFreeTypeAttribute(AdapterAttribute, AdapterMapped):
             adapter_instance.validate()
 
 
-class MainDataItem(AdapterObjectAttribute):
-    type =
+class LinksObject(AdapterObjectAttribute):
+    self = AdapterAttribute(str)
+    related: AdapterAttribute(str, required=False)
 
-main_data_mapping = {
-    dict:
+
+attributes_mapping = {
+    str: AdapterAttribute(str)
 }
 
-class JSONApiAdapter(BaseAdapter):
-    data = AdapterFreeTypeAttribute()
 
-#TODO searchable on which class
+class RelationshipItemData(AdapterObjectAttribute):
+    type = AdapterAttribute(str)
+    id = AdapterAttribute(str)
+
+
+class RelationshipItem(AdapterObjectAttribute):
+    links = LinksObject(required=False)
+    data = RelationshipItemData()
+
+
+relationships_type_mapping = {
+    dict: RelationshipItem()
+}
+
+
+class MainDataItem(AdapterObjectAttribute):
+    type = AdapterAttribute(str)
+    id = AdapterAttribute(str)
+    attributes = AdapterObjectFreeContentAttribute(attributes_mapping, required=False, searchable=True)
+    links = LinksObject(required=False)
+    relationships = AdapterObjectFreeContentAttribute(relationships_type_mapping, required=False)
+    # included
+
+
+main_data_mapping = {
+    dict: MainDataItem(),
+    # list: Collection()
+}
+
+
+class JSONApiAdapter(BaseAdapter):
+    data = AdapterFreeTypeAttribute(main_data_mapping)
+
+
+raw_data = {
+    "data": {
+        "type": "articles",
+        "id": "1",
+        "attributes": {
+            "title": "JSON API paints my bikeshed!"
+        },
+        "links": {
+            "self": "http://example.com/articles/1"
+        },
+        "relationships": {
+            "author": {
+                "links": {
+                    "self": "http://example.com/articles/1/relationships/author",
+                    "related": "http://example.com/articles/1/author"
+                },
+                "data": {"type": "people", "id": "9"}
+            },
+            "comments": {
+                "links": {
+                    "self": "http://example.com/articles/1/relationships/comments",
+                    "related": "http://example.com/articles/1/comments"
+                },
+                "data": {"type": "comments", "id": "5", },
+            }
+        }
+    }
+}
+
+j = JSONApiAdapter(raw_data)
+j.validate()
+# TODO searchable on which class
 # TODO search on free content's free content attrs ??
