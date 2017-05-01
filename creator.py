@@ -280,7 +280,6 @@ class JSONApiAdapter(BaseAdapter):
         super().__init__(raw_data, searchable=True)
 
 
-
 raw_data = {
     "data": {
         "type": "articles",
