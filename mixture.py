@@ -1,17 +1,21 @@
-from .base import AdapterAttribute, AdapterCompounded, AdapterSearchable, AdapterMapped, BaseAdapter
+from errors import AdapterValidationError
+from base import AdapterAttribute, AdapterSearchable, AdapterMapped, BaseAdapter, AdapterInsertTarget
 
 
-class AdapterObjectAttribute(AdapterAttribute, AdapterCompounded, AdapterSearchable):
+class AdapterObjectAttribute(AdapterAttribute, AdapterInsertTarget, AdapterSearchable):
     def __init__(self, **kwargs):
         kwargs.pop('data_type', None)
+        kwargs.pop('inner_type', None)
         AdapterAttribute.__init__(self, data_type=dict, **kwargs)
+        AdapterInsertTarget.__init__(self, inner_type=dict, **kwargs)
         AdapterSearchable.__init__(self, **kwargs)
-        AdapterCompounded.__init__(self)
 
     def __get__(self, owner_instance, owner):
         return self._create_field_adapter_instance(owner_instance)
 
     def search_in_attributes_and_return_proper_type(self, search_name, owner_instance=None):
+        if not self.searchable:
+            return
         if not owner_instance:
             raise ValueError('Owner instance parameter not filled.')
         adapter_field_instance = self._create_field_adapter_instance(owner_instance)
@@ -34,7 +38,7 @@ class AdapterObjectAttribute(AdapterAttribute, AdapterCompounded, AdapterSearcha
     def _get_adapter_instance_params(self, raw_value):
         kwargs = {
             'raw_data': raw_value,
-            'searchable': self.searchable
+            'editable': self._editable
         }
         return kwargs
 
@@ -43,6 +47,15 @@ class AdapterObjectAttribute(AdapterAttribute, AdapterCompounded, AdapterSearcha
         adapter_instance = self._create_field_adapter_instance(owner_instance)
         if adapter_instance:
             adapter_instance.validate()
+
+    def insert_value(self, key, value, owner_instance=None):
+        if not owner_instance:
+            raise ValueError('Owner instance parameter unfilled')
+        if not self._editable:
+            raise AdapterValidationError('This adapter object is not editable')
+
+        adapter_instance = self._create_field_adapter_instance(owner_instance)
+        setattr(adapter_instance, key, value)
 
 
 class AdapterFreeContent(BaseAdapter, AdapterMapped):
@@ -54,7 +67,7 @@ class AdapterFreeContent(BaseAdapter, AdapterMapped):
         for k, v in self._raw_data.items():
             if k != item:
                 continue
-            adapter_attribute = self._get_adapter_attribute_instance(k, v)
+            adapter_attribute = self._get_adapter_attribute_instance(k, v, self)
             ret = adapter_attribute.__get__(self, self.__class__)
             return ret
         return super().__getattr__(item)
@@ -65,13 +78,12 @@ class AdapterFreeContent(BaseAdapter, AdapterMapped):
         for k, v in self._raw_data.items():
             if k in user_defined_fields:
                 continue
-            self._get_adapter_attribute_instance(k, v).validate(owner_instance)
+            self._get_adapter_attribute_instance(k, v, self).validate(self)
 
 
-class AdapterObjectFreeContentAttribute(AdapterObjectAttribute, AdapterCompounded, AdapterMapped):
+class AdapterObjectFreeContentAttribute(AdapterObjectAttribute, AdapterMapped):
     def __init__(self, mapping, **kwargs):
         AdapterObjectAttribute.__init__(self, **kwargs)
-        AdapterCompounded.__init__(self)
         AdapterMapped.__init__(self, mapping, **kwargs)
 
     def _get_adapter_creation_base_classes(self):
@@ -115,17 +127,9 @@ class AdapterFreeTypeAttribute(AdapterAttribute, AdapterMapped, AdapterSearchabl
             adapter_instance.validate()
 
 
-
-
-
-
-
-
-
-
 class LinksObject(AdapterObjectAttribute):
     self = AdapterAttribute(str)
-    related: AdapterAttribute(str, required=False)
+    related = AdapterAttribute(str, required=False)
 
 
 attributes_mapping = {
@@ -140,7 +144,7 @@ class RelationshipItemData(AdapterObjectAttribute):
 
 class RelationshipItem(AdapterObjectAttribute):
     links = LinksObject(required=False)
-    data = RelationshipItemData()
+    data = RelationshipItemData(searchable=True)
 
 
 relationships_type_mapping = {
@@ -164,18 +168,14 @@ main_data_mapping = {
 
 
 class JSONApiAdapter(BaseAdapter):
-    data = AdapterFreeTypeAttribute(main_data_mapping, searchable=True)
-
-    def __init__(self, raw_data, **kwargs):
-        super().__init__(raw_data, searchable=True)
-
+    data = AdapterFreeTypeAttribute(main_data_mapping, searchable=True, insert=True)
 
 raw_data = {
     "data": {
         "type": "articles",
         "id": "1",
         "attributes": {
-            "title": "JSON API paints my bikeshed!"
+            "title": "JSON API paints my bikeshed!",
         },
         "links": {
             "self": "http://example.com/articles/1"
@@ -193,7 +193,7 @@ raw_data = {
                     "self": "http://example.com/articles/1/relationships/comments",
                     "related": "http://example.com/articles/1/comments"
                 },
-                "data": {"type": "comments", "id": 2, },
+                "data": {"type": "comments", "id": "5", },
             }
         }
     }
