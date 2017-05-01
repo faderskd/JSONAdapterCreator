@@ -1,0 +1,2 @@
+class AdapterValidationError(Exception):
+    pass
