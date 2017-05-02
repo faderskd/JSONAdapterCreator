@@ -12,7 +12,7 @@ class AdapterValidated(metaclass=ABCMeta):
 
 class AdapterSearchable(metaclass=ABCMeta):
     def __init__(self, searchable=False, **kwargs):
-        self.searchable = searchable
+        self.__dict__['searchable'] = searchable
 
     @abstractmethod
     def search_in_attributes_and_return_proper_type(self, search_name, owner_instance=None):
@@ -42,9 +42,9 @@ class AdapterAttribute(AdapterValidated):
 
     def _validate_raw_value(self, raw_value):
         if self._required and raw_value is None:
-            raise AdapterValidationError('Missing key "%s"' % self._name)
+            raise AdapterValidationError('Missing key "%s" in adapted data' % self._name)
         if raw_value is not None and not isinstance(raw_value, self._data_type):
-            raise AdapterValidationError('Incorrect data type for key "%s"' % self._name)
+            raise AdapterValidationError('Incorrect data type for key "%s" in adapted data' % self._name)
 
     def __set__(self, owner_instance, value):
         self._validate_set_data(value)
@@ -58,7 +58,7 @@ class AdapterAttribute(AdapterValidated):
 
     def validate(self, owner_instance=None):
         if not owner_instance:
-            raise ValueError('Owner instance parameter unfilled')
+            raise ValueError('Owner instance parameter is required')
 
         raw_value = self._get_owner_instance_raw_data(owner_instance).get(self._name, None)
         self._validate_raw_value(raw_value)
@@ -89,7 +89,7 @@ class AdapterCompounded(AdapterValidated):
 
     def validate(self, owner_instance=None):
         if not owner_instance:
-            raise ValueError('Owner instance parameter unfilled')
+            raise ValueError('Owner instance parameter is required')
         for _, field in self.get_adapter_fields():
             if isinstance(field, AdapterValidated):
                 field.validate(owner_instance)
@@ -97,33 +97,36 @@ class AdapterCompounded(AdapterValidated):
 
 class AdapterMapped:
     def __init__(self, mapping, **kwargs):
-        self._mapping = mapping
+        self.__dict__['_mapping'] = mapping
 
-    def _get_adapter_attribute_instance(self, name, raw_value, owner_instance=None):
+    def _get_attribute_instance(self, attribute_name, raw_value, owner_instance=None):
         if not owner_instance:
-            raise ValueError('Owner instance parameter unfilled')
+            raise ValueError('Owner instance parameter is required')
 
-        self._validate_against_mapping(name, raw_value)
-        adapter_attribute_instance = self._mapping[type(raw_value)]
-        adapter_attribute_instance.__set_name__(owner_instance.__class__, name)
-        return adapter_attribute_instance
+        self._validate_against_mapping(raw_value)
+        attribute_instance = self._mapping[type(raw_value)]
+        if not isinstance(attribute_instance, AdapterAttribute):
+            raise TypeError('Values in mapping must be instances of AdapterAttribute type')
 
-    def _validate_against_mapping(self, name, raw_value):
+        attribute_instance.__set_name__(owner_instance.__class__, attribute_name)
+        return attribute_instance
+
+    def _validate_against_mapping(self, raw_value):
         if type(raw_value) not in self._mapping:
-            raise AdapterValidationError('Incorrect data type for key "%s"' % name)
+            raise AdapterValidationError('Data type not in types mapping')
 
 
 class AdapterInsertTarget(AdapterCompounded):
-    def __init__(self, insert=False, insert_type=object, **kwargs):
+    def __init__(self, insertable=False, insert_type=object, **kwargs):
         super().__init__()
-        self.insert = insert
-        self.insert_type = insert_type
+        self.__dict__['insertable'] = insertable
+        self.__dict__['insert_type'] = insert_type
 
     def _get_insertable_fields(self):
         insertable_fields = []
         for field_name, field in self.get_adapter_fields():
-            if isinstance(field, AdapterInsertTarget) and field.insert:
-                insertable_fields.append(field)
+            if isinstance(field, AdapterInsertTarget) and field.insertable:
+                insertable_fields.append((field_name, field))
         return insertable_fields
 
     def insert_value(self, key, value, owner_instance=None):
@@ -132,8 +135,8 @@ class AdapterInsertTarget(AdapterCompounded):
 
 class BaseAdapter(AdapterInsertTarget, AdapterSearchable):
     def __init__(self, raw_data, editable=True, **kwargs):
-        self._raw_data = raw_data
-        self._editable = editable
+        self.__dict__['_raw_data'] = raw_data
+        self.__dict__['_editable'] = editable
         kwargs.pop('searchable', None)
         AdapterInsertTarget.__init__(self, **kwargs)
         AdapterSearchable.__init__(self, serchable=True, **kwargs)
@@ -158,15 +161,16 @@ class BaseAdapter(AdapterInsertTarget, AdapterSearchable):
     def validate(self, owner_instance=None):
         super().validate(self)
 
-    # def __setattr__(self, key, value):
-    #     if not self._editable:
-    #         raise AdapterValidationError('This adapter object is not editable')
-    #     self.insert_value(key, value)
+    def __setattr__(self, key, value):
+        if not self._editable:
+            raise AdapterValidationError('This adapter object is not editable')
+        self.insert_value(key, value)
 
     def insert_value(self, key, value, owner_instance=None):
-        for field_name, field in self._get_insertable_fields():
-            if type(value) == field.insert_type:
-                field.insert_value(key, value, self)
-                break
-        else:
-            super().__setattr__(key, value)
+        adapter_fields_names = {f[0] for f in self.get_adapter_fields()}
+        if key not in adapter_fields_names:
+            for field_name, field in self._get_insertable_fields():
+                if isinstance(value, field.insert_type) and field.insert:
+                    field.insert_value(key, value, self)
+                    return
+        super().__setattr__(key, value)
