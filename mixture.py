@@ -1,5 +1,5 @@
 from errors import AdapterValidationError
-from base import AdapterAttribute, AdapterSearchable, AdapterMapped, BaseAdapter, AdapterInsertTarget
+from base import AdapterAttribute, AdapterSearchable, AdapterMapped, BaseAdapter, AdapterInsertTarget, AdapterValidated
 
 
 class AdapterObjectAttribute(AdapterAttribute, AdapterInsertTarget, AdapterSearchable):
@@ -7,19 +7,11 @@ class AdapterObjectAttribute(AdapterAttribute, AdapterInsertTarget, AdapterSearc
         kwargs.pop('data_type', None)
         kwargs.pop('inner_type', None)
         AdapterAttribute.__init__(self, data_type=dict, **kwargs)
-        AdapterInsertTarget.__init__(self, inner_type=dict, **kwargs)
+        AdapterInsertTarget.__init__(self, **kwargs)
         AdapterSearchable.__init__(self, **kwargs)
 
     def __get__(self, owner_instance, owner):
         return self._create_field_adapter_instance(owner_instance)
-
-    def search_in_attributes_and_return_proper_type(self, search_name, owner_instance=None):
-        if not self.searchable:
-            return
-        if not owner_instance:
-            raise ValueError('Owner instance parameter not filled.')
-        adapter_field_instance = self._create_field_adapter_instance(owner_instance)
-        return getattr(adapter_field_instance, search_name, None)
 
     def _create_field_adapter_instance(self, owner_instance):
         raw_value = self._get_raw_value(owner_instance)
@@ -42,15 +34,19 @@ class AdapterObjectAttribute(AdapterAttribute, AdapterInsertTarget, AdapterSearc
         }
         return kwargs
 
-    def validate(self, owner_instance=None):
+    def search_in_attributes_and_return_proper_type(self, search_name, owner_instance):
+        if not self.searchable:
+            return
+        adapter_field_instance = self._create_field_adapter_instance(owner_instance)
+        return getattr(adapter_field_instance, search_name, None)
+
+    def validate(self, owner_instance):
         AdapterAttribute.validate(self, owner_instance)
         adapter_instance = self._create_field_adapter_instance(owner_instance)
-        if adapter_instance:
+        if adapter_instance and isinstance(adapter_instance, AdapterValidated):
             adapter_instance.validate()
 
-    def insert_value(self, key, value, owner_instance=None):
-        if not owner_instance:
-            raise ValueError('Owner instance parameter unfilled')
+    def insert_value(self, key, value, owner_instance):
         if not self._editable:
             raise AdapterValidationError('This adapter object is not editable')
 
@@ -64,11 +60,10 @@ class AdapterFreeContent(BaseAdapter, AdapterMapped):
         AdapterMapped.__init__(self, mapping, **kwargs)
 
     def __getattr__(self, item):
-        for k, v in self._raw_data.items():
-            if k != item:
-                continue
-            adapter_attribute = self._get_attribute_instance(k, v, self)
-            ret = adapter_attribute.__get__(self, self.__class__)
+        raw_value = self._raw_data.get(item, None)
+        if raw_value is not None:
+            attribute_instance = self._get_attribute_instance(item, raw_value, self)
+            ret = attribute_instance.__get__(self, self.__class__)
             return ret
         return super().__getattr__(item)
 
@@ -79,9 +74,9 @@ class AdapterFreeContent(BaseAdapter, AdapterMapped):
                 if isinstance(value, field.insert_type):
                     field.insert_value(key, value, self)
                     return
-
-        self._validate_against_mapping(key, value)
-        self._raw_data[key] = value
+            adapter_instance = self._get_attribute_instance(key, value, self)
+            adapter_instance.__set__(self, value)
+        super(BaseAdapter, self).__setattr__(key, value)
 
     def validate(self, owner_instance=None):
         super().validate()
@@ -89,7 +84,9 @@ class AdapterFreeContent(BaseAdapter, AdapterMapped):
         for k, v in self._raw_data.items():
             if k in user_defined_fields:
                 continue
-            self._get_attribute_instance(k, v, self).validate(self)
+            attribute_instance = self._get_attribute_instance(k, v, self)
+            if isinstance(attribute_instance, AdapterValidated):
+                attribute_instance.validate(self)
 
 
 class AdapterObjectFreeContentAttribute(AdapterObjectAttribute, AdapterMapped):
@@ -114,26 +111,22 @@ class AdapterFreeTypeAttribute(AdapterAttribute, AdapterMapped, AdapterSearchabl
         AdapterSearchable.__init__(self, **kwargs)
         AdapterInsertTarget.__init__(self, **kwargs)
 
-    def search_in_attributes_and_return_proper_type(self, search_name, owner_instance=None):
-        if not owner_instance:
-            raise ValueError('Owner instance parameter not filled')
+    def search_in_attributes_and_return_proper_type(self, search_name, owner_instance):
         if not self.searchable:
             return
         value = self.__get__(owner_instance, owner_instance.__class__)
         if isinstance(value, BaseAdapter):
-            ret = getattr(value, search_name, None)
-            if ret:
-                return ret
+            return getattr(value, search_name, None)
 
     def __get__(self, owner_instance, owner):
         raw_value = self._get_raw_value(owner_instance)
         if raw_value is None:
             return
-        adapter_attribute_instance = self._get_attribute_instance(self._name, raw_value, owner_instance)
-        return adapter_attribute_instance.__get__(owner_instance, owner)
+        attribute_instance = self._get_attribute_instance(self._name, raw_value, owner_instance)
+        return attribute_instance.__get__(owner_instance, owner)
 
-    def validate(self, owner_instance=None):
-        super().validate(owner_instance)
+    def validate(self, owner_instance):
+        AdapterAttribute.validate(self, owner_instance)
         adapter_instance = self.__get__(owner_instance, owner_instance.__class__)
         if isinstance(adapter_instance, BaseAdapter):
             adapter_instance.validate()
@@ -141,11 +134,9 @@ class AdapterFreeTypeAttribute(AdapterAttribute, AdapterMapped, AdapterSearchabl
     def _validate_set_data(self, value):
         if not self._editable:
             raise AdapterValidationError('Attribute "%s" is not editable' % self._name)
-        self._validate_against_mapping(self._name, value)
+        self._validate_against_mapping(value)
 
-    def insert_value(self, key, value, owner_instance=None):
-        if not owner_instance:
-            raise ValueError('Owner instance parameter unfilled')
+    def insert_value(self, key, value, owner_instance):
         adapter_instance = self.__get__(owner_instance, owner_instance.__class__)
         if isinstance(adapter_instance, AdapterInsertTarget):
             adapter_instance.insert_value(key, value, owner_instance)
