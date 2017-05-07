@@ -125,6 +125,27 @@ class AdapterInsertTarget(AdapterCompounded):
         raise NotImplementedError()
 
 
+class AdapterAliased(AdapterCompounded):
+    def __init__(self, source=None, target=None, **kwargs):
+        super().__init__()
+        self.__dict__['source'] = source
+        self.__dict__['target'] = target
+
+    def search_in_attributes(self, source_name, owner_instance):
+        for field_name, field in self._get_aliased_fields():
+            if
+
+
+
+class AdapterCompoundedAliased(AdapterAliased):
+    def _get_aliased_fields(self):
+        aliased_fields = []
+        for field_name, field in self.get_adapter_fields():
+            if isinstance(field, AdapterAliased):
+                aliased_fields.append((field_name, field))
+        return aliased_fields
+
+
 class BaseAdapter(AdapterInsertTarget, AdapterSearchable):
     def __init__(self, raw_data, editable=True, **kwargs):
         self.__dict__['_raw_data'] = raw_data
@@ -154,15 +175,16 @@ class BaseAdapter(AdapterInsertTarget, AdapterSearchable):
         super().validate(self)
 
     def __setattr__(self, key, value):
-        if not self._editable:
-            raise AdapterValidationError('This adapter object is not editable')
         self.insert_value(key, value)
 
     def insert_value(self, key, value, owner_instance=None):
+        if not self._editable:
+            raise AdapterValidationError('This adapter object is not editable')
+
         adapter_fields_names = {f[0] for f in self.get_adapter_fields()}
         if key not in adapter_fields_names:
             for field_name, field in self._get_insertable_fields():
-                if field.insert and isinstance(value, field.insert_type):
+                if field.insertable and isinstance(value, field.insert_type):
                     field.insert_value(key, value, self)
                     return
             raise AdapterValidationError('Inserted value not match to any adapter field')

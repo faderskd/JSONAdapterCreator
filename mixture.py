@@ -5,7 +5,6 @@ from base import AdapterAttribute, AdapterSearchable, AdapterMapped, BaseAdapter
 class AdapterObjectAttribute(AdapterAttribute, AdapterInsertTarget, AdapterSearchable):
     def __init__(self, **kwargs):
         kwargs.pop('data_type', None)
-        kwargs.pop('inner_type', None)
         AdapterAttribute.__init__(self, data_type=dict, **kwargs)
         AdapterInsertTarget.__init__(self, **kwargs)
         AdapterSearchable.__init__(self, **kwargs)
@@ -25,7 +24,7 @@ class AdapterObjectAttribute(AdapterAttribute, AdapterInsertTarget, AdapterSearc
         return type(class_name, self._get_adapter_creation_base_classes(), dict(self.get_adapter_fields()))
 
     def _get_adapter_creation_base_classes(self):
-        return (BaseAdapter,)
+        return BaseAdapter,
 
     def _get_adapter_instance_params(self, raw_value):
         kwargs = {
@@ -37,8 +36,8 @@ class AdapterObjectAttribute(AdapterAttribute, AdapterInsertTarget, AdapterSearc
     def search_in_attributes_and_return_proper_type(self, search_name, owner_instance):
         if not self.searchable:
             return
-        adapter_field_instance = self._create_field_adapter_instance(owner_instance)
-        return getattr(adapter_field_instance, search_name, None)
+        adapter_instance = self._create_field_adapter_instance(owner_instance)
+        return getattr(adapter_instance, search_name, None)
 
     def validate(self, owner_instance):
         AdapterAttribute.validate(self, owner_instance)
@@ -71,7 +70,7 @@ class AdapterFreeContent(BaseAdapter, AdapterMapped):
         adapter_fields_names = {f[0] for f in self.get_adapter_fields()}
         if key not in adapter_fields_names:
             for field_name, field in self._get_insertable_fields():
-                if isinstance(value, field.insert_type):
+                if field.insertable and isinstance(value, field.insert_type):
                     field.insert_value(key, value, self)
                     return
             adapter_instance = self._get_attribute_instance(key, value, self)
@@ -95,12 +94,17 @@ class AdapterObjectFreeContentAttribute(AdapterObjectAttribute, AdapterMapped):
         AdapterMapped.__init__(self, mapping, **kwargs)
 
     def _get_adapter_creation_base_classes(self):
-        return (AdapterFreeContent,)
+        return AdapterFreeContent,
 
     def _get_adapter_instance_params(self, raw_value):
         kwargs = super()._get_adapter_instance_params(raw_value)
         kwargs.update({'mapping': self._mapping})
         return kwargs
+
+    def _validate_set_data(self, value):
+        if not self._editable:
+            raise AdapterValidationError('Attribute "%s" is not editable' % self._name)
+        self._validate_against_mapping(value)
 
 
 class AdapterFreeTypeAttribute(AdapterAttribute, AdapterMapped, AdapterSearchable, AdapterInsertTarget):
@@ -140,3 +144,5 @@ class AdapterFreeTypeAttribute(AdapterAttribute, AdapterMapped, AdapterSearchabl
         adapter_instance = self.__get__(owner_instance, owner_instance.__class__)
         if isinstance(adapter_instance, AdapterInsertTarget):
             adapter_instance.insert_value(key, value, owner_instance)
+        else:
+            raise AdapterValidationError('Inserted value not match to any adapter field')

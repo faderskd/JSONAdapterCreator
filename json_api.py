@@ -19,7 +19,7 @@ class RelationshipItemData(AdapterObjectAttribute):
 
 class RelationshipItem(AdapterObjectAttribute):
     links = LinksObject(required=False)
-    data = RelationshipItemData(searchable=True, insert=True)
+    data = RelationshipItemData(searchable=True, insertable=True)
 
 
 relationships_type_mapping = {
@@ -30,19 +30,20 @@ relationships_type_mapping = {
 class MainDataItem(AdapterObjectAttribute):
     type = AdapterAttribute(str)
     id = AdapterAttribute(str)
-    attributes = AdapterObjectFreeContentAttribute(attributes_mapping, required=False, searchable=True, insert=True, insert_type=str)
+    attributes = AdapterObjectFreeContentAttribute(attributes_mapping, required=False, searchable=True, insertable=True, insert_type=str)
     links = LinksObject(required=False)
-    relationships = AdapterObjectFreeContentAttribute(relationships_type_mapping, required=False, searchable=True, insert=True, insert_type=dict)
-    # included
+    relationships = AdapterObjectFreeContentAttribute(relationships_type_mapping, required=False, searchable=True, insertable=True, insert_type=dict)
 
 
 main_data_type_mapping = {
-    dict: MainDataItem(searchable=True),
+    dict: MainDataItem(searchable=True, insertable=True),
     # list: Collection()
 }
 
+
 class JSONApiAdapter(BaseAdapter):
-    data = AdapterFreeTypeAttribute(main_data_type_mapping, searchable=True, insert=True)
+    data = AdapterFreeTypeAttribute(main_data_type_mapping, searchable=True, insertable=True)
+    #included
 
 raw_data = {
     "data": {
