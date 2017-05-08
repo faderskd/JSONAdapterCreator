@@ -3,7 +3,7 @@ from mixture import BaseAdapter, AdapterObjectAttribute, AdapterObjectFreeConten
 
 
 class LinksObject(AdapterObjectAttribute):
-    self = AdapterAttribute(str, alias='dupa')
+    self = AdapterAttribute(str, target_alias='dupa')
     related = AdapterAttribute(str, required=False)
 
 
@@ -32,7 +32,7 @@ class MainDataItem(AdapterObjectAttribute):
     id = AdapterAttribute(str)
     attributes = AdapterObjectFreeContentAttribute(attributes_mapping, required=False, searchable=True, insertable=True)
     links = LinksObject(required=False)
-    relationships = AdapterObjectFreeContentAttribute(relationships_type_mapping, required=False, searchable=True)
+    relationships = AdapterObjectFreeContentAttribute(relationships_type_mapping, required=False, searchable=True, target_alias='relations')
 
 
 main_data_type_mapping = {
@@ -43,7 +43,7 @@ main_data_type_mapping = {
 
 class JSONApiAdapter(BaseAdapter):
     def __init__(self, raw_data, **kwargs):
-        super().__init__(raw_data, alias='relations', **kwargs)
+        super().__init__(raw_data, source_aliases=['relations', 'dupa'], **kwargs)
 
     data = AdapterFreeTypeAttribute(main_data_type_mapping, searchable=True, insertable=True)
     #included

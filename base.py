@@ -1,16 +1,17 @@
+import collections
 import inspect
-from abc import ABCMeta, abstractmethod
+from abc import abstractmethod
 
 from errors import AdapterValidationError
 
 
-class AdapterValidated(metaclass=ABCMeta):
+class AdapterValidated:
     @abstractmethod
     def validate(self, owner_instance):
         pass
 
 
-class AdapterSearchable(metaclass=ABCMeta):
+class AdapterSearchable:
     def __init__(self, searchable=False, **kwargs):
         self.__dict__['searchable'] = searchable
 
@@ -19,7 +20,7 @@ class AdapterSearchable(metaclass=ABCMeta):
         pass
 
 
-class AdapterAliased(metaclass=ABCMeta):
+class AdapterAliased:
     def __init__(self, source_aliases=None, target_alias=None, **kwargs):
         self.__dict__['source_aliases'] = source_aliases
         self.__dict__['target_alias'] = target_alias
@@ -29,7 +30,7 @@ class AdapterAliased(metaclass=ABCMeta):
         pass
 
 
-class AdapterInsertTarget(metaclass=ABCMeta):
+class AdapterInsertTarget:
     def __init__(self, insertable=False, insert_type=object, **kwargs):
         self.__dict__['insertable'] = insertable
         self.__dict__['insert_type'] = insert_type
@@ -89,7 +90,7 @@ class AdapterAttribute(AdapterValidated, AdapterAliased):
             if k in required_with:
                 required_with.remove(k)
         if required_with:
-            s = "Attribute %s required together with %s" % (self._name, ", ".join([k for k in self._required_with]))
+            s = 'Attribute "%s" required together with "%s"' % (self._name, ", ".join([k for k in self._required_with]))
             raise AdapterValidationError(s)
 
     def search_aliased_adapter(self, target_alias, owner_instance):
@@ -97,21 +98,32 @@ class AdapterAttribute(AdapterValidated, AdapterAliased):
             return self._get_raw_value(owner_instance)
 
 
-class AdapterCompounded(AdapterValidated):
-    def get_adapter_fields(self):
-        fields = []
-        for field_name, field in self._get_user_defined_fields():
-            if isinstance(field, AdapterAttribute):
-                fields.append((field_name, field))
-        return fields
+class AdapterBaseMetaClass(type):
+    @classmethod
+    def __prepare__(self, name, bases):
+        return collections.OrderedDict()
 
-    def _get_user_defined_fields(self):
-        attributes = inspect.getmembers(self.__class__, lambda a: not (inspect.isroutine(a)))
-        fields = [a for a in attributes if not (a[0].startswith('__') and a[0].endswith('__'))]
-        return fields
+    def __new__(mcls, name, bases, attrs):
+        ordered_fields = collections.OrderedDict()
+        for attr, obj in attrs.items():
+            if isinstance(obj, AdapterAttribute):
+                ordered_fields[attr] = obj
+        attrs['__ordered_fields__'] = ordered_fields
+
+        cls = super(AdapterBaseMetaClass, mcls).__new__(mcls, name, bases, attrs)
+        for attr, obj in attrs.items():
+            if isinstance(obj, AdapterAttribute):
+                ordered_fields[attr] = obj
+                obj.__set_name__(cls, attr)
+        return cls
+
+
+class AdapterCompounded(AdapterValidated, metaclass=AdapterBaseMetaClass):
+    def get_adapter_fields(self):
+        return self.__class__.__ordered_fields__
 
     def validate(self, owner_instance):
-        for _, field in self.get_adapter_fields():
+        for _, field in self.get_adapter_fields().items():
             if isinstance(field, AdapterValidated):
                 field.validate(owner_instance)
 
@@ -158,7 +170,7 @@ class BaseAdapter(AdapterSearchable, AdapterCompounded, AdapterAliased, AdapterI
         if self.target_alias and target_alias == self.taget_alias:
             return self
 
-        for _, field in self.get_adapter_fields():
+        for _, field in self.get_adapter_fields().items():
             if not isinstance(field, AdapterAliased):
                 continue
             ret = field.search_aliased_adapter(target_alias, self)
@@ -166,7 +178,7 @@ class BaseAdapter(AdapterSearchable, AdapterCompounded, AdapterAliased, AdapterI
                 return ret
 
     def search_in_attributes(self, search_name, owner_instance=None):
-        for _, field in self.get_adapter_fields():
+        for _, field in self.get_adapter_fields().items():
             if not (isinstance(field, AdapterSearchable) and field.searchable):
                 continue
             ret = field.search_in_attributes(search_name, self)
@@ -177,9 +189,8 @@ class BaseAdapter(AdapterSearchable, AdapterCompounded, AdapterAliased, AdapterI
         self.insert_value(key, value)
 
     def insert_value(self, key, value, owner_instance=None):
-        adapter_fields_names = {f[0] for f in self.get_adapter_fields()}
-        if key not in adapter_fields_names:
-            for field_name, field in self.get_adapter_fields():
+        if key not in self.get_adapter_fields():
+            for field_name, field in self.get_adapter_fields().items():
                 if isinstance(field, AdapterInsertTarget) and field.insert and isinstance(value, field.insert_type):
                     field.insert_value(key, value, self)
                     return

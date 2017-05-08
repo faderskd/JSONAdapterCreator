@@ -24,7 +24,7 @@ class AdapterObjectAttribute(AdapterAttribute, AdapterCompounded, AdapterSearcha
 
     def _create_adapter_class(self, name):
         class_name = '%sAdapterType' % name.lower().title()
-        return type(class_name, self._get_adapter_creation_base_classes(), dict(self.get_adapter_fields()))
+        return type(class_name, self._get_adapter_creation_base_classes(), dict(self.get_adapter_fields().items()))
 
     def _get_adapter_creation_base_classes(self):
         return BaseAdapter,
@@ -34,12 +34,12 @@ class AdapterObjectAttribute(AdapterAttribute, AdapterCompounded, AdapterSearcha
             'raw_data': raw_value,
             'editable': self._editable,
             'target_alias': self.target_alias,
-            'source_alias': self.source_alias
+            'source_aliases': self.source_aliases
         }
         return kwargs
 
     def search_in_attributes(self, search_name, owner_instance):
-        adapter_fields = self.get_adapter_fields()
+        adapter_fields = self.get_adapter_fields().items()
         adapter_instance = self._create_field_adapter_instance(owner_instance)
         if not adapter_instance:
             return
@@ -48,7 +48,7 @@ class AdapterObjectAttribute(AdapterAttribute, AdapterCompounded, AdapterSearcha
             if field_name == search_name:
                 return field.__get__(adapter_instance, adapter_instance.__class__)
 
-        for _, field in adapter_fields():
+        for _, field in adapter_fields:
             if not (isinstance(field, AdapterSearchable) and field.searchable):
                 continue
             ret = field.search_in_attributes(search_name, adapter_instance)
@@ -60,10 +60,10 @@ class AdapterObjectAttribute(AdapterAttribute, AdapterCompounded, AdapterSearcha
         if not adapter_instance:
             return
 
-        if self.target_alias and target_alias == self.taget_alias:
+        if self.target_alias and target_alias == self.target_alias:
             return adapter_instance
 
-        for _, field in self.get_adapter_fields():
+        for _, field in self.get_adapter_fields().items():
             if not isinstance(field, AdapterAliased):
                 continue
             ret = field.search_aliased_adapter(target_alias, adapter_instance)
@@ -97,18 +97,16 @@ class AdapterFreeContent(BaseAdapter, AdapterMapped):
 
     def validate(self, owner_instance=None):
         super().validate()
-        adapter_fields_names = {f[0] for f in self.get_adapter_fields()}
         for k, v in self._raw_data.items():
-            if k in adapter_fields_names:
+            if k in self.get_adapter_fields():
                 continue
             attribute_instance = self._get_attribute_instance(k, v, self)
             if isinstance(attribute_instance, AdapterValidated):
                 attribute_instance.validate(self)
 
     def insert_value(self, key, value, owner_instance=None):
-        adapter_fields_names = {f[0] for f in self.get_adapter_fields()}
-        if key not in adapter_fields_names:
-            for field_name, field in self.get_adapter_fields():
+        if key not in self.get_adapter_fields():
+            for field_name, field in self.get_adapter_fields().items():
                 if isinstance(value, field.insert_type):
                     field.insert_value(key, value, self)
                     return
