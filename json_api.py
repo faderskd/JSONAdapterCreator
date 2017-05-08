@@ -3,7 +3,7 @@ from mixture import BaseAdapter, AdapterObjectAttribute, AdapterObjectFreeConten
 
 
 class LinksObject(AdapterObjectAttribute):
-    self = AdapterAttribute(str)
+    self = AdapterAttribute(str, alias='dupa')
     related = AdapterAttribute(str, required=False)
 
 

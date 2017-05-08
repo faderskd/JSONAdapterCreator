@@ -20,11 +20,12 @@ class AdapterSearchable(metaclass=ABCMeta):
 
 
 class AdapterAliased(metaclass=ABCMeta):
-    def __init__(self, alias=None, **kwargs):
-        self.__dict__['alias'] = alias
+    def __init__(self, source_aliases=None, target_alias=None, **kwargs):
+        self.__dict__['source_aliases'] = source_aliases
+        self.__dict__['target_alias'] = target_alias
 
     @abstractmethod
-    def search_aliased_adapter(self, alias, owner_instance):
+    def search_aliased_adapter(self, target_alias, owner_instance):
         pass
 
 
@@ -91,8 +92,8 @@ class AdapterAttribute(AdapterValidated, AdapterAliased):
             s = "Attribute %s required together with %s" % (self._name, ", ".join([k for k in self._required_with]))
             raise AdapterValidationError(s)
 
-    def search_aliased_adapter(self, alias, owner_instance):
-        if self.alias and self.alias == alias:
+    def search_aliased_adapter(self, target_alias, owner_instance):
+        if self.target_alias and self.target_alias == target_alias:
             return self._get_raw_value(owner_instance)
 
 
@@ -144,21 +145,23 @@ class BaseAdapter(AdapterSearchable, AdapterCompounded, AdapterAliased, AdapterI
         AdapterInsertTarget.__init__(self, **kwargs)
 
     def __getattr__(self, item):
-        value = self.search_aliased_adapter(item)
+        value = None
+        if item in self.source_aliases:
+            value = self.search_aliased_adapter(item)
         if not value:
             value = self.search_in_attributes(item)
         if not value:
             raise AttributeError(item)
         return value
 
-    def search_aliased_adapter(self, alias, owner_instance=None):
-        if self.alias and alias == self.alias:
+    def search_aliased_adapter(self, target_alias, owner_instance=None):
+        if self.target_alias and target_alias == self.taget_alias:
             return self
 
         for _, field in self.get_adapter_fields():
             if not isinstance(field, AdapterAliased):
                 continue
-            ret = field.search_aliased_adapter(alias, self)
+            ret = field.search_aliased_adapter(target_alias, self)
             if ret:
                 return ret
 
@@ -170,12 +173,6 @@ class BaseAdapter(AdapterSearchable, AdapterCompounded, AdapterAliased, AdapterI
             if ret:
                 return ret
 
-    def serialize_to_raw_data(self):
-        return self._raw_data
-
-    def validate(self, owner_instance=None):
-        super().validate(self)
-
     def __setattr__(self, key, value):
         if not self._editable:
             raise AdapterValidationError('This adapter object is not editable')
@@ -184,9 +181,15 @@ class BaseAdapter(AdapterSearchable, AdapterCompounded, AdapterAliased, AdapterI
     def insert_value(self, key, value, owner_instance=None):
         adapter_fields_names = {f[0] for f in self.get_adapter_fields()}
         if key not in adapter_fields_names:
-            for field_name, field in self._get_insertable_fields():
-                if field.insert and isinstance(value, field.insert_type):
+            for field_name, field in self.get_adapter_fields():
+                if isinstance(field, AdapterInsertTarget) and field.insert and isinstance(value, field.insert_type):
                     field.insert_value(key, value, self)
                     return
             raise AdapterValidationError('Inserted value not match to any adapter field')
         super().__setattr__(key, value)
+
+    def serialize_to_raw_data(self):
+        return self._raw_data
+
+    def validate(self, owner_instance=None):
+        super().validate(self)
