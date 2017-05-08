@@ -33,7 +33,8 @@ class AdapterObjectAttribute(AdapterAttribute, AdapterCompounded, AdapterSearcha
         kwargs = {
             'raw_data': raw_value,
             'editable': self._editable,
-            'alias': self.alias
+            'target_alias': self.target_alias,
+            'source_alias': self.source_alias
         }
         return kwargs
 
@@ -74,9 +75,9 @@ class AdapterFreeContent(BaseAdapter, AdapterMapped):
 
     def validate(self, owner_instance=None):
         super().validate()
-        user_defined_fields = {f[0] for f in self.get_adapter_fields()}
+        adapter_fields_names = {f[0] for f in self.get_adapter_fields()}
         for k, v in self._raw_data.items():
-            if k in user_defined_fields:
+            if k in adapter_fields_names:
                 continue
             attribute_instance = self._get_attribute_instance(k, v, self)
             if isinstance(attribute_instance, AdapterValidated):
@@ -85,7 +86,7 @@ class AdapterFreeContent(BaseAdapter, AdapterMapped):
     def insert_value(self, key, value, owner_instance=None):
         adapter_fields_names = {f[0] for f in self.get_adapter_fields()}
         if key not in adapter_fields_names:
-            for field_name, field in self._get_insertable_fields():
+            for field_name, field in self.get_adapter_fields():
                 if isinstance(value, field.insert_type):
                     field.insert_value(key, value, self)
                     return
