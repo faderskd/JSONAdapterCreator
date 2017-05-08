@@ -174,8 +174,6 @@ class BaseAdapter(AdapterSearchable, AdapterCompounded, AdapterAliased, AdapterI
                 return ret
 
     def __setattr__(self, key, value):
-        if not self._editable:
-            raise AdapterValidationError('This adapter object is not editable')
         self.insert_value(key, value)
 
     def insert_value(self, key, value, owner_instance=None):
@@ -186,6 +184,9 @@ class BaseAdapter(AdapterSearchable, AdapterCompounded, AdapterAliased, AdapterI
                     field.insert_value(key, value, self)
                     return
             raise AdapterValidationError('Inserted value not match to any adapter field')
+
+        if not self._editable:
+            raise AdapterValidationError('Adapter "%s" is not editable' % self.__class__)
         super().__setattr__(key, value)
 
     def serialize_to_raw_data(self):
