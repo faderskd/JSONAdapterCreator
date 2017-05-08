@@ -15,12 +15,33 @@ class AdapterSearchable(metaclass=ABCMeta):
         self.__dict__['searchable'] = searchable
 
     @abstractmethod
-    def search_in_attributes_and_return_proper_type(self, search_name, owner_instance):
+    def search_in_attributes(self, search_name, owner_instance):
         pass
 
 
-class AdapterAttribute(AdapterValidated):
+class AdapterAliased(metaclass=ABCMeta):
+    def __init__(self, alias=None, **kwargs):
+        self.__dict__['alias'] = alias
+
+    @abstractmethod
+    def search_aliased_adapter(self, alias, owner_instance):
+        pass
+
+
+class AdapterInsertTarget(metaclass=ABCMeta):
+    def __init__(self, insertable=False, insert_type=object, **kwargs):
+        self.__dict__['insertable'] = insertable
+        self.__dict__['insert_type'] = insert_type
+
+    @abstractmethod
+    def insert_value(self, key, value, owner_instance):
+        pass
+
+
+class AdapterAttribute(AdapterValidated, AdapterAliased):
     def __init__(self, data_type, required=True, required_with=None, editable=True, **kwargs):
+        AdapterValidated.__init__(self)
+        AdapterAliased.__init__(self, **kwargs)
         self._data_type = data_type
         self._required = required
         self._required_with = required_with if required_with else []
@@ -70,6 +91,10 @@ class AdapterAttribute(AdapterValidated):
             s = "Attribute %s required together with %s" % (self._name, ", ".join([k for k in self._required_with]))
             raise AdapterValidationError(s)
 
+    def search_aliased_adapter(self, alias, owner_instance):
+        if self.alias and self.alias == alias:
+            return self._get_raw_value(owner_instance)
+
 
 class AdapterCompounded(AdapterValidated):
     def get_adapter_fields(self):
@@ -108,63 +133,40 @@ class AdapterMapped:
             raise AdapterValidationError('Data type not in types mapping')
 
 
-class AdapterInsertTarget(AdapterCompounded):
-    def __init__(self, insertable=False, insert_type=object, **kwargs):
-        super().__init__()
-        self.__dict__['insertable'] = insertable
-        self.__dict__['insert_type'] = insert_type
-
-    def _get_insertable_fields(self):
-        insertable_fields = []
-        for field_name, field in self.get_adapter_fields():
-            if isinstance(field, AdapterInsertTarget) and field.insertable:
-                insertable_fields.append((field_name, field))
-        return insertable_fields
-
-    def insert_value(self, key, value, owner_instance):
-        raise NotImplementedError()
-
-
-class AdapterAliased(AdapterCompounded):
-    def __init__(self, source=None, target=None, **kwargs):
-        super().__init__()
-        self.__dict__['source'] = source
-        self.__dict__['target'] = target
-
-    def search_in_attributes(self, source_name, owner_instance):
-        for field_name, field in self._get_aliased_fields():
-            if
-
-
-
-class AdapterCompoundedAliased(AdapterAliased):
-    def _get_aliased_fields(self):
-        aliased_fields = []
-        for field_name, field in self.get_adapter_fields():
-            if isinstance(field, AdapterAliased):
-                aliased_fields.append((field_name, field))
-        return aliased_fields
-
-
-class BaseAdapter(AdapterInsertTarget, AdapterSearchable):
+class BaseAdapter(AdapterSearchable, AdapterCompounded, AdapterAliased, AdapterInsertTarget):
     def __init__(self, raw_data, editable=True, **kwargs):
         self.__dict__['_raw_data'] = raw_data
         self.__dict__['_editable'] = editable
         kwargs.pop('searchable', None)
-        AdapterInsertTarget.__init__(self, **kwargs)
+        AdapterCompounded.__init__(self)
         AdapterSearchable.__init__(self, serchable=True, **kwargs)
+        AdapterAliased.__init__(self, **kwargs)
+        AdapterInsertTarget.__init__(self, **kwargs)
 
     def __getattr__(self, item):
-        value = self.search_in_attributes_and_return_proper_type(item)
+        value = self.search_aliased_adapter(item)
+        if not value:
+            value = self.search_in_attributes(item)
         if not value:
             raise AttributeError(item)
         return value
 
-    def search_in_attributes_and_return_proper_type(self, search_name, owner_instance=None):
+    def search_aliased_adapter(self, alias, owner_instance=None):
+        if self.alias and alias == self.alias:
+            return self
+
+        for _, field in self.get_adapter_fields():
+            if not isinstance(field, AdapterAliased):
+                continue
+            ret = field.search_aliased_adapter(alias, self)
+            if ret:
+                return ret
+
+    def search_in_attributes(self, search_name, owner_instance=None):
         for _, field in self.get_adapter_fields():
             if not (isinstance(field, AdapterSearchable) and field.searchable):
                 continue
-            ret = field.search_in_attributes_and_return_proper_type(search_name, self)
+            ret = field.search_in_attributes(search_name, self)
             if ret:
                 return ret
 
@@ -175,16 +177,15 @@ class BaseAdapter(AdapterInsertTarget, AdapterSearchable):
         super().validate(self)
 
     def __setattr__(self, key, value):
+        if not self._editable:
+            raise AdapterValidationError('This adapter object is not editable')
         self.insert_value(key, value)
 
     def insert_value(self, key, value, owner_instance=None):
-        if not self._editable:
-            raise AdapterValidationError('This adapter object is not editable')
-
         adapter_fields_names = {f[0] for f in self.get_adapter_fields()}
         if key not in adapter_fields_names:
             for field_name, field in self._get_insertable_fields():
-                if field.insertable and isinstance(value, field.insert_type):
+                if field.insert and isinstance(value, field.insert_type):
                     field.insert_value(key, value, self)
                     return
             raise AdapterValidationError('Inserted value not match to any adapter field')

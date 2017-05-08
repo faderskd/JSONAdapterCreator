@@ -30,9 +30,9 @@ relationships_type_mapping = {
 class MainDataItem(AdapterObjectAttribute):
     type = AdapterAttribute(str)
     id = AdapterAttribute(str)
-    attributes = AdapterObjectFreeContentAttribute(attributes_mapping, required=False, searchable=True, insertable=True, insert_type=str)
+    attributes = AdapterObjectFreeContentAttribute(attributes_mapping, required=False, searchable=True, insertable=True)
     links = LinksObject(required=False)
-    relationships = AdapterObjectFreeContentAttribute(relationships_type_mapping, required=False, searchable=True, insertable=True, insert_type=dict)
+    relationships = AdapterObjectFreeContentAttribute(relationships_type_mapping, required=False, searchable=True)
 
 
 main_data_type_mapping = {
@@ -42,6 +42,9 @@ main_data_type_mapping = {
 
 
 class JSONApiAdapter(BaseAdapter):
+    def __init__(self, raw_data, **kwargs):
+        super().__init__(raw_data, alias='relations', **kwargs)
+
     data = AdapterFreeTypeAttribute(main_data_type_mapping, searchable=True, insertable=True)
     #included
 
