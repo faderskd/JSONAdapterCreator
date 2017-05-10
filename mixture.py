@@ -90,9 +90,9 @@ class AdapterFreeContent(BaseAdapter, AdapterMapped):
         AdapterMapped.__init__(self, mapping, **kwargs)
 
     def __getattr__(self, item):
-        raw_value = self._raw_data.get(item, None)
-        if raw_value is not None:
-            attribute_instance = self._get_attribute_instance(item, raw_value, self)
+        raw_item_value = self._raw_data.get(item, None)
+        if raw_item_value is not None:
+            attribute_instance = self._get_attribute_instance(item, raw_item_value, self)
             ret = attribute_instance.__get__(self, self.__class__)
             return ret
         return super().__getattr__(item)
@@ -219,7 +219,7 @@ class AdapterFreeTypeAttribute(AdapterAttribute, AdapterMapped, AdapterSearchabl
     def validate(self, owner_instance):
         AdapterAttribute.validate(self, owner_instance)
         raw_value = self._get_raw_value(owner_instance)
-        if not raw_value:
+        if raw_value is None:
             return
 
         attribute_instance = self._get_attribute_instance(self._name, raw_value, owner_instance)

@@ -112,7 +112,6 @@ class AdapterBaseMetaClass(type):
         cls = super(AdapterBaseMetaClass, mcls).__new__(mcls, name, bases, attrs)
         for attr, obj in attrs.items():
             if isinstance(obj, AdapterAttribute):
-                ordered_fields[attr] = obj
                 obj.__set_name__(cls, attr)
         return cls
 
@@ -166,7 +165,7 @@ class BaseAdapter(AdapterSearchable, AdapterCompounded, AdapterAliased, AdapterI
         return value
 
     def search_aliased_adapter(self, target_alias, owner_instance=None):
-        if self.target_alias and target_alias == self.taget_alias:
+        if self.target_alias and target_alias == self.target_alias:
             return self
 
         for _, field in self.get_adapter_fields().items():
