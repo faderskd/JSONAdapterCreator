@@ -39,16 +39,16 @@ class AdapterObjectAttribute(AdapterAttribute, AdapterCompounded, AdapterSearcha
         return kwargs
 
     def search_in_attributes(self, search_name, owner_instance):
-        adapter_fields = self.get_adapter_fields().items()
+        adapter_fields = self.get_adapter_fields()
         adapter_instance = self._create_field_adapter_instance(owner_instance)
         if not adapter_instance:
             return
 
-        for field_name, field in adapter_fields:
-            if field_name == search_name:
-                return field.__get__(adapter_instance, adapter_instance.__class__)
+        searched_field = adapter_fields.get(search_name)
+        if searched_field:
+            return searched_field.__get__(adapter_instance, adapter_instance.__class__)
 
-        for _, field in adapter_fields:
+        for _, field in adapter_fields.items():
             if not (isinstance(field, AdapterSearchable) and field.searchable):
                 continue
             ret = field.search_in_attributes(search_name, adapter_instance)
@@ -113,7 +113,7 @@ class AdapterFreeContent(BaseAdapter, AdapterMapped):
                     field.insert_value(key, value, self)
                     return
 
-            if not self.editable:
+            if not self._editable:
                 raise AdapterValidationError('Adapter "%s" is not editable' % self.__class__)
             attribute_instance = self._get_attribute_instance(key, value, self)
             attribute_instance.__set__(self, value)
@@ -136,10 +136,41 @@ class AdapterObjectFreeContentAttribute(AdapterObjectAttribute, AdapterMapped):
         kwargs.update({'mapping': self._mapping})
         return kwargs
 
-    def _validate_set_data(self, value):
-        if not self._editable:
-            raise AdapterValidationError('Attribute "%s" is not editable' % self._name)
-        self._validate_against_mapping(value)
+    def search_in_attributes(self, search_name, owner_instance):
+        adapter_fields = self.get_adapter_fields()
+        adapter_instance = self._create_field_adapter_instance(owner_instance)
+        if not adapter_instance:
+            return
+
+        searched_field = adapter_fields.get(search_name)
+        if searched_field:
+            return searched_field.__get__(adapter_instance, adapter_instance.__class__)
+
+        raw_value = self._get_raw_value(owner_instance)
+        search_name_raw_value = raw_value.get(search_name, None)
+        if search_name_raw_value is not None:
+            attribute_instance = self._get_attribute_instance(search_name, search_name_raw_value, adapter_instance)
+            ret = attribute_instance.__get__(adapter_instance, self.__class__)
+            if ret:
+                return ret
+
+        for _, field in adapter_fields.items():
+            if not (isinstance(field, AdapterSearchable) and field.searchable):
+                continue
+            ret = field.search_in_attributes(search_name, adapter_instance)
+            if ret:
+                return ret
+
+    def validate(self, owner_instance):
+        super().validate(owner_instance)
+        raw_value = self._get_raw_value(owner_instance)
+        adapter_instance = self._create_field_adapter_instance(owner_instance)
+        for k, v in raw_value.items():
+            if k in self.get_adapter_fields():
+                continue
+            attribute_instance = self._get_attribute_instance(k, v, adapter_instance)
+            if isinstance(attribute_instance, AdapterValidated):
+                attribute_instance.validate(adapter_instance)
 
 
 class AdapterFreeTypeAttribute(AdapterAttribute, AdapterMapped, AdapterSearchable, AdapterAliased):

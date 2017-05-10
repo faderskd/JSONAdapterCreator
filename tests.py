@@ -152,5 +152,60 @@ class BaseAdapterTests(unittest.TestCase):
         self.assertEqual(self.user.user_team.team_name, 'Kolka team')
 
 
+ingredients_mapping = {
+    str: base.AdapterAttribute(str),
+    dict: mixture.AdapterObjectFreeContentAttribute({str: base.AdapterAttribute(str)})
+}
+
+
+class Ingredients(mixture.AdapterObjectFreeContentAttribute):
+    unit = mixture.AdapterAttribute(str)
+
+
+class Potion(base.BaseAdapter):
+    name = base.AdapterAttribute(str)
+    ingredients = Ingredients(ingredients_mapping, searchable=True)
+
+
+potion_raw_data = {
+    'name': 'elixir of youth',
+    'ingredients': {
+        'unit': 'ml',
+        'water': '500 ml',
+        'vinegar': {
+            'old_wine': '15 ml',
+            'alcohol': '10 ml'
+        }
+    }
+}
+
+
+class AdapterFreeContentTests(unittest.TestCase):
+    def setUp(self):
+        self.raw_data = deepcopy(potion_raw_data)
+        self.potion = Potion(self.raw_data)
+
+    def test_adapter_not_throw_errors_for_proper_data(self):
+        self.potion.validate()
+
+    def test_adapter_properly_fetch_data(self):
+        self.assertEqual(self.potion.name, 'elixir of youth')
+        self.assertIsInstance(self.potion.ingredients, mixture.AdapterFreeContent)
+        self.assertEqual(self.potion.ingredients.unit, 'ml')
+        self.assertEqual(self.potion.ingredients.vinegar.old_wine, '15 ml')
+
+    def test_ingredients_are_searchable(self):
+        self.assertEqual(self.potion.unit, 'ml')
+        self.assertEqual(self.potion.water, '500 ml')
+        self.assertIsInstance(self.potion.vinegar, mixture.AdapterFreeContent)
+        self.assertEqual(self.potion.vinegar.old_wine, '15 ml')
+        self.assertEqual(self.potion.vinegar.alcohol, '10 ml')
+
+    def test_set_ingredients(self):
+        self.potion.ingredients.salt = '1ml'
+        self.potion.ingredients.cake = {
+            'salt': 333
+        }
+
 if __name__ == '__main__':
     unittest.main()

@@ -1,5 +1,4 @@
 import collections
-import inspect
 from abc import abstractmethod
 
 from errors import AdapterValidationError
