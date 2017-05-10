@@ -22,7 +22,7 @@ class AdapterSearchable:
 
 class AdapterAliased:
     def __init__(self, source_aliases=None, target_alias=None, **kwargs):
-        self.__dict__['source_aliases'] = source_aliases
+        self.__dict__['source_aliases'] = source_aliases if source_aliases else []
         self.__dict__['target_alias'] = target_alias
 
     @abstractmethod
@@ -191,7 +191,7 @@ class BaseAdapter(AdapterSearchable, AdapterCompounded, AdapterAliased, AdapterI
     def insert_value(self, key, value, owner_instance=None):
         if key not in self.get_adapter_fields():
             for field_name, field in self.get_adapter_fields().items():
-                if isinstance(field, AdapterInsertTarget) and field.insert and isinstance(value, field.insert_type):
+                if isinstance(field, AdapterInsertTarget) and field.insertable and isinstance(value, field.insert_type):
                     field.insert_value(key, value, self)
                     return
             raise AdapterValidationError('Inserted value not match to any adapter field')

@@ -72,6 +72,8 @@ class AdapterObjectAttribute(AdapterAttribute, AdapterCompounded, AdapterSearcha
 
     def insert_value(self, key, value, owner_instance):
         adapter_instance = self._create_field_adapter_instance(owner_instance)
+        if not adapter_instance:
+            raise AdapterValidationError('Value cannot be inserted to "%s" attribute because it has missing key in adapted data' % self._name)
         if adapter_instance and isinstance(adapter_instance, AdapterInsertTarget):
             adapter_instance.insert_value(key, value)
 
@@ -107,7 +109,7 @@ class AdapterFreeContent(BaseAdapter, AdapterMapped):
     def insert_value(self, key, value, owner_instance=None):
         if key not in self.get_adapter_fields():
             for field_name, field in self.get_adapter_fields().items():
-                if isinstance(value, field.insert_type):
+                if isinstance(field, AdapterInsertTarget) and field.insertable and isinstance(value, field.insert_type):
                     field.insert_value(key, value, self)
                     return
 

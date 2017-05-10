@@ -4,6 +4,9 @@ from copy import deepcopy
 import base
 import mixture
 import errors
+import pprint
+
+pp = pprint.PrettyPrinter(indent=2)
 
 
 class ExampleAdapterForAdapterAttributeTests(base.BaseAdapter):
@@ -57,13 +60,97 @@ class AdapterAttributeTests(unittest.TestCase):
         self.assertEqual(self.adapter.required_attr, 'required attr value')
 
 
-class CompoundedField(mixture.AdapterCompounded):
-    pass
+class Address(mixture.AdapterObjectAttribute):
+    street = base.AdapterAttribute(str, target_alias='user_street')
+    postal_code = base.AdapterAttribute(str)
 
 
-class ExampleAdapterForBaseAdapterTests(base.BaseAdapter):
-    simple_field = base.AdapterAttribute(str)
-    # compounded_field =
+class Team(mixture.AdapterObjectAttribute):
+    team_name = base.AdapterAttribute(str)
+
+
+class Profile(mixture.AdapterObjectAttribute):
+    is_active = base.AdapterAttribute(bool)
+    id = base.AdapterAttribute(int, target_alias='user_id')
+    team = Team(searchable=True, target_alias='user_team')
+
+
+class AdditionalData(mixture.AdapterObjectAttribute):
+    phone_number = base.AdapterAttribute(str)
+    email = base.AdapterAttribute(str)
+
+
+class User(base.BaseAdapter):
+    def __init__(self, raw_data):
+        super().__init__(raw_data, source_aliases=['user_id', 'user_street', 'user_team'])
+    username = base.AdapterAttribute(str)
+    address = Address(required=False, searchable=True)
+    profile = Profile(searchable=True, insertable=True, insert_type=(bool, int))
+    additional_data = AdditionalData(required=False, insertable=True, insert_type=str)
+
+
+user_raw_data = {
+    'username': 'Daniel',
+    'address': {
+        'street': 'Jana Pawla II',
+        'postal_code': '05-222 New York'
+    },
+    'profile': {
+        'is_active': True,
+        'id': 123,
+        'team': {
+            'team_name': 'Kolka team'
+        }
+    }
+}
+
+
+class BaseAdapterTests(unittest.TestCase):
+    def setUp(self):
+        self.raw_data = deepcopy(user_raw_data)
+        self.user = User(self.raw_data)
+
+    def test_adapter_not_raises_errors_for_proper_data(self):
+        self.user.validate()
+
+    def test_compounded_object_return_proper_adapter_object(self):
+        self.assertIsInstance(self.user.profile, base.BaseAdapter)
+        self.assertIsInstance(self.user.profile.team, base.BaseAdapter)
+
+    def test_attribute_of_returned_adapter_object_can_be_accessed_and_return_proper_values(self):
+        self.assertEqual(self.user.profile.is_active, True)
+        self.assertEqual(self.user.profile.id, 123)
+        self.assertEqual(self.user.address.street, 'Jana Pawla II')
+        self.assertEqual(self.user.profile.team.team_name, 'Kolka team')
+
+    def test_profile_and_address_and_team_compounded_attributes_are_searchable(self):
+        self.assertEqual(self.user.street, 'Jana Pawla II')
+        self.assertEqual(self.user.postal_code, '05-222 New York')
+        self.assertEqual(self.user.id, 123)
+        self.assertIsInstance(self.user.team, base.BaseAdapter)
+        self.assertEqual(self.user.team.team_name, 'Kolka team')
+        self.assertEqual(self.user.team_name, 'Kolka team')
+
+    def test_profile_and_additional_data_are_insertable(self):
+        with self.assertRaises(errors.AdapterValidationError):
+            self.user.email = 'daniel@op.pl'
+        self.user.additional_data = {}
+        self.user.email = 'daniel@op.pl'
+        self.user.phone_number = '111-222-333'
+        self.assertEqual(self.raw_data['additional_data']['email'], 'daniel@op.pl')
+        self.assertEqual(self.raw_data['additional_data']['phone_number'], '111-222-333')
+
+        self.user.is_active = False
+        self.user.id = 444
+        self.assertEqual(self.raw_data['profile']['is_active'], False)
+        self.assertEqual(self.raw_data['profile']['id'], 444)
+
+    def test_id_and_street_and_team_aliases_works_propertly(self):
+        self.assertEqual(self.user.user_id, 123)
+        self.assertEqual(self.user.user_street, 'Jana Pawla II')
+        self.assertIsInstance(self.user.user_team, base.BaseAdapter)
+        self.assertEqual(self.user.user_team.team_name, 'Kolka team')
+
 
 if __name__ == '__main__':
     unittest.main()
