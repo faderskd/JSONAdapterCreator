@@ -46,7 +46,7 @@ class AttributeValidator:
     def _generate_error_path_pair(self, error_path=None):
         if not error_path:
             error_path = []
-        error_path_str = "/".join(error_path) + "/" + self._name
+        error_path_str = "/".join(error_path) + "/" + self._name if len(error_path) > 0 else self._name
         error_path = error_path + [self.name]
         return error_path, error_path_str
 
@@ -88,7 +88,7 @@ class FreeContentCompoundedAttributeValidator(MappingValidationMixin, Compounded
     def validate(self, parent_data, error_path=None):
         super().validate(parent_data, error_path)
 
-        error_path, error_path_str = self._generate_error_path_pair()
+        error_path, error_path_str = self._generate_error_path_pair(error_path)
         raw_value = self._get_raw_value_from_parent_data(parent_data)
         if raw_value is None:
             return
@@ -109,7 +109,7 @@ class FreeTypeAttributeValidator(MappingValidationMixin, AttributeValidator):
     def validate(self, parent_data, error_path=None):
         super().validate(parent_data, error_path)
 
-        error_path, error_path_str = self._generate_error_path_pair(error_path)
+        _, error_path_str = self._generate_error_path_pair(error_path)
         raw_value = self._get_raw_value_from_parent_data(parent_data)
         if raw_value is None:
             return
@@ -132,11 +132,11 @@ class CollectionAttributeValidator(AttributeValidator):
         raw_value = self._get_raw_value_from_parent_data(parent_data)
         if raw_value is None:
             return
-        self._inner_validator.name = 'collection_item'
-        for v in raw_value:
-            #this is hack for preserving the same validator interface as in whole application
+        for index, v in enumerate(raw_value):
+            self._inner_validator.name = "[%s]" % str(index)
+            # this is hack for preserving the same validator interface as in whole application
             collection_item_parent_data = {
-                'collection_item': v
+                "[%s]" % str(index): v
             }
             self._inner_validator.validate(collection_item_parent_data, error_path)
 

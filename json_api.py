@@ -79,7 +79,7 @@ raw_data = {
                 },
                 "data": [
                     {"type": "comments", "id": "5"},
-                    {"type": "comments", "id": "12"}
+                    {"tyjpe": "comments", "id": "12"}
                 ]
             }
         }
