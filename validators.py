@@ -50,7 +50,7 @@ class AttributeValidator:
         if not error_path:
             error_path = []
         error_path_str = "/".join(error_path) + "/" + str(self._name) if len(error_path) > 0 else str(self._name)
-        error_path = error_path + [self.name]
+        error_path = error_path + [str(self.name)]
         return error_path, error_path_str
 
 
