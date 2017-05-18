@@ -59,7 +59,7 @@ raw_data = {
         "type": "articles",
         "id": "1",
         "attributes": {
-            "title": "JSON API paints my bikeshed!"
+            (2,): "JSON API paints my bikeshed!"
         },
         "links": {
             "self": "http://example.com/articles/1"
@@ -79,7 +79,7 @@ raw_data = {
                 },
                 "data": [
                     {"type": "comments", "id": "5"},
-                    {"tyjpe": "comments", "id": "12"}
+                    {"type": "comments", "id": "12"}
                 ]
             }
         }

@@ -19,6 +19,9 @@ class AttributeValidator:
     def validate(self, parent_data, error_path=None):
         _, error_path_str = self._generate_error_path_pair(error_path)
 
+        if not isinstance(self._name, str):
+            raise AdapterValidationError('Incorrect key type "%s"' % error_path_str)
+
         raw_value = self._get_raw_value_from_parent_data(parent_data)
         if self._required and raw_value is None:
             raise AdapterValidationError('Missing key "%s"' % error_path_str)
@@ -46,7 +49,7 @@ class AttributeValidator:
     def _generate_error_path_pair(self, error_path=None):
         if not error_path:
             error_path = []
-        error_path_str = "/".join(error_path) + "/" + self._name if len(error_path) > 0 else self._name
+        error_path_str = "/".join(error_path) + "/" + str(self._name) if len(error_path) > 0 else str(self._name)
         error_path = error_path + [self.name]
         return error_path, error_path_str
 
@@ -95,7 +98,7 @@ class FreeContentCompoundedAttributeValidator(MappingValidationMixin, Compounded
         child_attributes_names = {child.name for child in self._child_validators}
         for k, v in raw_value.items():
             if k not in child_attributes_names:
-                self.validate_against_mapping(v, error_path_str + '/' + k)
+                self.validate_against_mapping(v, error_path_str + '/' + str(k))
                 validator_instance = self.get_validator_instance(v)
                 validator_instance.name = k
                 validator_instance.validate(raw_value, error_path)
