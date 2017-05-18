@@ -1,5 +1,5 @@
 import schema
-
+import copy
 
 example_user_data = {
     'username': 'faderskd',
@@ -16,3 +16,70 @@ class UserSchema(schema.Schema):
     email = schema.SchemaAttribute(str)
     is_active = schema.SchemaAttribute(bool)
     birth_date = schema.SchemaAttribute(str, required=False)
+
+
+class Settings(schema.SchemaCompoundedAttribute):
+    profile_color = schema.SchemaAttribute(str)
+    stay_logged = schema.SchemaAttribute(bool)
+
+
+class ProfileSchema(schema.SchemaCompoundedAttribute):
+    last_logged = schema.SchemaAttribute(str)
+    settings = Settings()
+
+
+class UserCompoundedSchema(UserSchema):
+    profile = ProfileSchema()
+
+
+example_compounded_user_data = example_user_data.copy()
+profile_data = {
+    'profile': {
+        'last_logged': 'yesterday',
+        'settings': {
+            'profile_color': 'green',
+            'stay_logged': True
+        }
+    }
+}
+example_compounded_user_data.update(profile_data)
+
+
+class UserAppearance(schema.SchemaCompoundedAttribute):
+    height = schema.SchemaAttribute(data_type=str)
+    age = schema.SchemaAttribute(data_type=int)
+
+
+user_attribute_mapping = {
+    str: schema.SchemaAttribute(data_type=str),
+    dict: UserAppearance(data_type=dict)
+}
+
+example_free_content_user_data = copy.deepcopy(example_compounded_user_data)
+attributes_data = {
+    'attributes': {
+        'surname': 'Kolik',
+        'job': 'Programmer',
+        'appearance': {
+            'height': '174cm',
+            'age': 22
+        }
+    }
+}
+example_free_content_user_data.update(attributes_data)
+
+
+class UserWithFreeContentAttributesSchema(UserCompoundedSchema):
+    attributes = schema.FreeContentCompoundedSchemaAttribute(mapping=user_attribute_mapping)
+
+
+user_type_mapping = {
+    str: schema.SchemaAttribute(data_type=str),
+    dict: schema.FreeContentCompoundedSchemaAttribute(mapping=user_attribute_mapping)
+
+}
+example_free_type_user_data = copy.deepcopy(example_free_content_user_data)
+
+
+class UserWithFreeTypeAttributeSchema(UserCompoundedSchema):
+    attributes = schema.FreeTypeSchemaAttribute(mapping=user_type_mapping)
