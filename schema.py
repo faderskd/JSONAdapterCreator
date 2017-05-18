@@ -1,6 +1,5 @@
 import collections
 
-import errors
 import validators
 
 
@@ -78,14 +77,6 @@ class MappingMixin(object):
         super().__init__(**kwargs)
         self._mapping = mapping
 
-    def get_schema_attribute_instance(self, name, raw_value):
-        schema_attribute_instance = self._mapping[type(raw_value)]
-        if not isinstance(schema_attribute_instance, SchemaAttribute):
-            raise errors.UnexpectedMappingElement('Values in mapping must be instances of SchemaAttribute type')
-
-        schema_attribute_instance.name = name
-        return schema_attribute_instance
-
 
 class FreeContentCompoundedSchemaAttribute(MappingMixin, SchemaCompoundedAttribute):
     def get_validator(self):
@@ -112,9 +103,11 @@ class FreeTypeSchemaAttribute(MappingMixin, SchemaAttribute):
         validator_mapping = {}
         for k, v in self._mapping.items():
             validator_mapping[k] = v.get_validator()
+
         return validators.FreeTypeAttributeValidator(
             mapping=validator_mapping,
             name=self._name,
+            data_type=object,
             required=self._required,
             required_with=self._required_with
         )

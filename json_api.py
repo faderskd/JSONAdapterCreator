@@ -1,8 +1,7 @@
-from base import AdapterAttribute
-from mixture import BaseAdapter, AdapterObjectAttribute, AdapterObjectFreeContentAttribute, AdapterFreeTypeAttribute
+import schema
 
 
-class LinksObject(AdapterObjectAttribute):
+class LinksObject(schema.SchemaCompoundedAttribute):
     self = AdapterAttribute(str, target_alias='dupa')
     related = AdapterAttribute(str, required=False)
 

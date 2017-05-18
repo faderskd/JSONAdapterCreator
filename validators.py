@@ -3,10 +3,10 @@ from errors import AdapterValidationError, UnexpectedMappingElement
 
 class AttributeValidator:
     def __init__(self, data_type, required, required_with, name=None):
-        self._name = name
         self._data_type = data_type
         self._required = required
         self._required_with = required_with
+        self._name = name
 
     @property
     def name(self):
@@ -63,7 +63,7 @@ class MappingValidationMixin(object):
 
     def validate_against_mapping(self, name, raw_value):
         if type(raw_value) not in self._mapping:
-            raise AdapterValidationError('Data type for key "%s" not in types mapping' % name)
+            raise AdapterValidationError('Incorrect data type for key "%s"' % name)
 
     def get_validator_instance(self, raw_value):
         validator_instance = self._mapping[type(raw_value)]
@@ -88,10 +88,6 @@ class FreeContentCompoundedAttributeValidator(MappingValidationMixin, Compounded
 
 
 class FreeTypeAttributeValidator(MappingValidationMixin, AttributeValidator):
-    def __init__(self, **kwargs):
-        kwargs.pop('data_type', None)
-        super().__init__(data_type=object, **kwargs)
-
     def validate(self, parent_data):
         super().validate(parent_data)
         raw_value = self._get_raw_value_from_parent_data(parent_data)
