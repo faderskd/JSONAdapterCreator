@@ -66,7 +66,6 @@ class SchemaCompoundedAttribute(SchemaCompoundedMixin, SchemaAttribute):
         return validators.CompoundedAttributeValidator(
             child_validators=self.get_attributes_validators(),
             name=self._name,
-            data_type=dict,
             required=self._required,
             required_with=self._required_with
         )
@@ -78,7 +77,7 @@ class MappingMixin(object):
         self._mapping = mapping
 
 
-class FreeContentCompoundedSchemaAttribute(MappingMixin, SchemaCompoundedAttribute):
+class SchemaFreeContentCompoundedAttribute(MappingMixin, SchemaCompoundedAttribute):
     def get_validator(self):
         validator_mapping = {}
         for k, v in self._mapping.items():
@@ -88,13 +87,12 @@ class FreeContentCompoundedSchemaAttribute(MappingMixin, SchemaCompoundedAttribu
             mapping=validator_mapping,
             child_validators=self.get_attributes_validators(),
             name=self._name,
-            data_type=dict,
             required=self._required,
             required_with=self._required_with
         )
 
 
-class FreeTypeSchemaAttribute(MappingMixin, SchemaAttribute):
+class SchemaFreeTypeAttribute(MappingMixin, SchemaAttribute):
     def __init__(self, **kwargs):
         kwargs.pop('data_type', None)
         super().__init__(data_type=object, **kwargs)
@@ -107,7 +105,21 @@ class FreeTypeSchemaAttribute(MappingMixin, SchemaAttribute):
         return validators.FreeTypeAttributeValidator(
             mapping=validator_mapping,
             name=self._name,
-            data_type=object,
+            required=self._required,
+            required_with=self._required_with
+        )
+
+
+class SchemaCollectionAttribute(SchemaAttribute):
+    def __init__(self, inner_attribute, **kwargs):
+        kwargs.pop('data_type', None)
+        super().__init__(data_type=list, **kwargs)
+        self._inner_attribute = inner_attribute
+
+    def get_validator(self):
+        return validators.CollectionAttributeValidator(
+            inner_validator=self._inner_attribute.get_validator(),
+            name=self._name,
             required=self._required,
             required_with=self._required_with
         )

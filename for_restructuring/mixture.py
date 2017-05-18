@@ -1,5 +1,5 @@
 from errors import AdapterValidationError
-from base import AdapterAttribute, AdapterSearchable, AdapterMapped, BaseAdapter, AdapterCompounded, AdapterValidated, \
+from for_restructuring.base import AdapterAttribute, AdapterSearchable, AdapterMapped, BaseAdapter, AdapterCompounded, AdapterValidated, \
     AdapterAliased, AdapterInsertTarget
 
 

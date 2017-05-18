@@ -70,16 +70,34 @@ example_free_content_user_data.update(attributes_data)
 
 
 class UserWithFreeContentAttributesSchema(UserCompoundedSchema):
-    attributes = schema.FreeContentCompoundedSchemaAttribute(mapping=user_attribute_mapping)
+    attributes = schema.SchemaFreeContentCompoundedAttribute(mapping=user_attribute_mapping)
 
 
 user_type_mapping = {
     str: schema.SchemaAttribute(data_type=str),
-    dict: schema.FreeContentCompoundedSchemaAttribute(mapping=user_attribute_mapping)
+    dict: schema.SchemaFreeContentCompoundedAttribute(mapping=user_attribute_mapping)
 
 }
 example_free_type_user_data = copy.deepcopy(example_free_content_user_data)
 
 
 class UserWithFreeTypeAttributeSchema(UserCompoundedSchema):
-    attributes = schema.FreeTypeSchemaAttribute(mapping=user_type_mapping)
+    attributes = schema.SchemaFreeTypeAttribute(mapping=user_type_mapping)
+
+
+class Post(schema.SchemaCompoundedAttribute):
+    title = schema.SchemaAttribute(data_type=str)
+    tags = schema.SchemaCollectionAttribute(inner_attribute=schema.SchemaAttribute(data_type=str))
+
+
+example_collection_user_data = copy.deepcopy(example_free_type_user_data)
+posts_data = {'posts': [
+        {'title': 'How inheritance work in python', 'tags': ['Python', 'Inheritance']},
+        {'title': 'Most popular languages in 2017', 'tags': ['Programming', 'Programming Languages']},
+    ]
+}
+example_collection_user_data.update(posts_data)
+
+
+class UserWithCollectionAttributeSchema(UserWithFreeTypeAttributeSchema):
+    posts = schema.SchemaCollectionAttribute(inner_attribute=Post())

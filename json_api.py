@@ -2,23 +2,32 @@ import schema
 
 
 class LinksObject(schema.SchemaCompoundedAttribute):
-    self = AdapterAttribute(str, target_alias='dupa')
-    related = AdapterAttribute(str, required=False)
+    self = schema.SchemaAttribute(data_type=str)
+
+
+class RelationshipLinksObject(LinksObject):
+    related = schema.SchemaAttribute(data_type=str)
 
 
 attributes_mapping = {
-    str: AdapterAttribute(str)
+    str: schema.SchemaAttribute(data_type=str)
 }
 
 
-class RelationshipItemData(AdapterObjectAttribute):
-    type = AdapterAttribute(str)
-    id = AdapterAttribute(str)
+class RelationshipItemData(schema.SchemaCompoundedAttribute):
+    type = schema.SchemaAttribute(data_type=str)
+    id = schema.SchemaAttribute(data_type=str)
 
 
-class RelationshipItem(AdapterObjectAttribute):
-    links = LinksObject(required=False)
-    data = RelationshipItemData(searchable=True, insertable=True)
+relationships_data_type_mapping = {
+    dict: RelationshipItemData(),
+    list: schema.SchemaCollectionAttribute(inner_attribute=RelationshipItemData())
+}
+
+
+class RelationshipItem(schema.SchemaCompoundedAttribute):
+    links = RelationshipLinksObject(required=False)
+    data = schema.SchemaFreeTypeAttribute(mapping=relationships_data_type_mapping)
 
 
 relationships_type_mapping = {
@@ -26,33 +35,31 @@ relationships_type_mapping = {
 }
 
 
-class MainDataItem(AdapterObjectAttribute):
-    type = AdapterAttribute(str)
-    id = AdapterAttribute(str)
-    attributes = AdapterObjectFreeContentAttribute(attributes_mapping, required=False, searchable=True, insertable=True)
+class MainDataItem(schema.SchemaCompoundedAttribute):
+    type = schema.SchemaAttribute(data_type=str)
+    id = schema.SchemaAttribute(data_type=str)
+    attributes = schema.SchemaFreeContentCompoundedAttribute(attributes_mapping, required=False)
     links = LinksObject(required=False)
-    relationships = AdapterObjectFreeContentAttribute(relationships_type_mapping, required=False, searchable=True, target_alias='relations')
+    relationships = schema.SchemaFreeContentCompoundedAttribute(relationships_type_mapping, required=False)
 
 
 main_data_type_mapping = {
-    dict: MainDataItem(searchable=True, insertable=True),
-    # list: Collection()
+    dict: MainDataItem(),
+    list: schema.SchemaCollectionAttribute(inner_attribute=MainDataItem())
 }
 
 
-class JSONApiAdapter(BaseAdapter):
-    def __init__(self, raw_data, **kwargs):
-        super().__init__(raw_data, source_aliases=['relations', 'dupa'], **kwargs)
-
-    data = AdapterFreeTypeAttribute(main_data_type_mapping, searchable=True, insertable=True)
+class JSONApiSchema(schema.Schema):
+    data = schema.SchemaFreeTypeAttribute(mapping=main_data_type_mapping)
     #included
 
+
 raw_data = {
-    "data": {
+    "data": [{
         "type": "articles",
         "id": "1",
         "attributes": {
-            "title": "JSON API paints my bikeshed!",
+            "title": "JSON API paints my bikeshed!"
         },
         "links": {
             "self": "http://example.com/articles/1"
@@ -70,11 +77,15 @@ raw_data = {
                     "self": "http://example.com/articles/1/relationships/comments",
                     "related": "http://example.com/articles/1/comments"
                 },
-                "data": {"type": "comments", "id": "5", },
+                "data": [
+                    {"type": "comments", "id": "5"},
+                    {"type": "comments", "id": "12"}
+                ]
             }
         }
-    }
+    }]
 }
 
-j = JSONApiAdapter(raw_data)
-j.validate()
+j = JSONApiSchema()
+validator = j.get_validator()
+validator.validate(raw_data)

@@ -59,3 +59,12 @@ class TestSchemaFreeTypeAttribute(unittest.TestCase):
         self.assertIsInstance(self.validator._child_validators[-1], validators.FreeTypeAttributeValidator)
 
 
+class TestSchemaCollectionAttribute(unittest.TestCase):
+    def setUp(self):
+        self.user_data = deepcopy(tests.utils.example_collection_user_data)
+        self.user_schema = tests.utils.UserWithCollectionAttributeSchema()
+        self.validator = self.user_schema.get_validator()
+
+    def test_schema_properly_generates_validator_object(self):
+        self.assertIsInstance(self.validator._child_validators[-1], validators.CollectionAttributeValidator)
+        self.assertIsInstance(self.validator._child_validators[-1]._inner_validator, validators.CompoundedAttributeValidator)

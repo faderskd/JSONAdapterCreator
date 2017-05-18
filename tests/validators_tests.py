@@ -103,7 +103,7 @@ class TestValidatorFreeContentWithCompoundedSchemaAttributes(unittest.TestCase):
             self.validator.validate(self.user_data)
 
 
-class TestValidatorFreeTypeSchemaAttributes(unittest.TestCase):
+class TestValidatorWithFreeTypeSchemaAttributes(unittest.TestCase):
     def setUp(self):
         self.user_data = deepcopy(tests.utils.example_free_type_user_data)
         self.user_schema = tests.utils.UserWithFreeTypeAttributeSchema()
@@ -136,5 +136,35 @@ class TestValidatorFreeTypeSchemaAttributes(unittest.TestCase):
 
     def test_validator_throw_error_for_empty_nested_data(self):
         self.user_data['attributes']['surname'] = ''
+        with self.assertRaises(errors.AdapterValidationError):
+            self.validator.validate(self.user_data)
+
+
+class TestValidatorWithCollectionSchemaAttributes(unittest.TestCase):
+    def setUp(self):
+        self.user_data = deepcopy(tests.utils.example_collection_user_data)
+        self.user_schema = tests.utils.UserWithCollectionAttributeSchema()
+        self.validator = self.user_schema.get_validator()
+
+    def test_validator_not_throw_errors_for_proper_data(self):
+        self.validator.validate(self.user_data)
+
+    def test_validator_throw_error_for_missing_main_key(self):
+        del self.user_data['posts']
+        with self.assertRaises(errors.AdapterValidationError):
+            self.validator.validate(self.user_data)
+
+    def test_validator_throw_error_for_missing_nested_key(self):
+        del self.user_data['posts'][0]['title']
+        with self.assertRaises(errors.AdapterValidationError):
+            self.validator.validate(self.user_data)
+
+    def test_validator_throw_error_for_incorrect_nested_data_type(self):
+        self.user_data['posts'][1]['tags'] = 123
+        with self.assertRaises(errors.AdapterValidationError):
+            self.validator.validate(self.user_data)
+
+    def test_validator_throw_error_for_incorrect_collection_type(self):
+        self.user_data['posts'][1] = 'hello'
         with self.assertRaises(errors.AdapterValidationError):
             self.validator.validate(self.user_data)
