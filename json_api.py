@@ -59,7 +59,7 @@ raw_data = {
         "type": "articles",
         "id": "1",
         "attributes": {
-            (2,): "JSON API paints my bikeshed!"
+            "title": "JSON API paints my bikeshed!"
         },
         "links": {
             "self": "http://example.com/articles/1"
